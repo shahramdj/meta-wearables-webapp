@@ -35,6 +35,10 @@ However, `#000000` must **never** be used on UI surfaces that need to be visible
 
 ```html
 <meta name="viewport" content="width=600, height=600, initial-scale=1.0">
+<!-- Brief, app-specific description of what the app does -->
+<meta name="description" content="...">
+<!-- Identifies the page as a Meta Display Glasses (MRBD) compatible webapp -->
+<meta name="mrbd-web-app-capable" content="yes">
 ```
 
 ```css

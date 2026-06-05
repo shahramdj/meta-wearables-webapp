@@ -78,6 +78,8 @@ Generate three files using these templates as the foundation:
 
 Key requirements for the HTML:
 - Viewport: `width=600, height=600`
+- Description: `<meta name="description" content="...">` in the `<head>` with a brief, app-specific summary of what the app does. Replace the template placeholder with real copy.
+- MRBD identification: `<meta name="mrbd-web-app-capable" content="yes">` in the `<head>` to positively identify the page as a Meta Display Glasses (MRBD) compatible webapp. Keep `content="yes"` verbatim.
 - All interactive elements: `class="focusable"` and `tabindex="0"` if not a button
 - Button actions: `data-action="action-name"`
 - Back buttons: `data-action="back"` with `&#8592;` arrow character
@@ -157,6 +159,8 @@ See [references/ui-components.md](references/ui-components.md) for reusable HTML
 - [ ] Buttons have `data-action` attributes
 - [ ] Back buttons use `data-action="back"`
 - [ ] Viewport is `width=600, height=600`
+- [ ] `<head>` has a `<meta name="description">` tag with an app-specific summary (placeholder replaced)
+- [ ] `<head>` has `<meta name="mrbd-web-app-capable" content="yes">`
 - [ ] D-pad navigation works (arrow keys move focus with wrap-around)
 - [ ] Enter key activates focused elements
 - [ ] Escape key navigates back
