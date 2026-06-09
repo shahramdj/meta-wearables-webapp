@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="Spirit level tool for Meta Display Glasses with pitch/roll readout, calibration, and demo mode.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <title>Level Tool</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="home" class="screen">
+      <header class="header">
+        <h1>Level Tool</h1>
+        <span id="status-indicator" class="header-meta">Ready</span>
+      </header>
+      <div class="content">
+        <div class="level-card card">
+          <div class="level-ring">
+            <div id="bubble" class="bubble green"></div>
+            <div class="level-center"></div>
+          </div>
+          <div class="level-caption">Bubble drifts toward the tilt direction</div>
+        </div>
+
+        <div class="sensor-grid">
+          <div class="sensor-card card focusable" tabindex="0" data-action="noop">
+            <div class="sensor-label">Pitch</div>
+            <div id="pitch-value" class="sensor-value">0.0°</div>
+          </div>
+          <div class="sensor-card card focusable" tabindex="0" data-action="noop">
+            <div class="sensor-label">Roll</div>
+            <div id="roll-value" class="sensor-value">0.0°</div>
+          </div>
+        </div>
+
+        <div class="notes card">
+          <div class="note-line">Calibrate current orientation as zero with the button below.</div>
+          <div class="note-line">If sensors are unavailable, demo mode will simulate gentle tilt.</div>
+        </div>
+      </div>
+      <nav class="nav-bar">
+        <button class="nav-item focusable primary" data-action="start">Start</button>
+        <button class="nav-item focusable" data-action="calibrate">Calibrate</button>
+        <button class="nav-item focusable danger" data-action="stop">Stop</button>
+      </nav>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
