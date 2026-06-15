@@ -12,7 +12,7 @@
         'Maintain IV fluids and reassess pain control.',
         'Encourage deep breathing and early mobilization.',
       ],
-      xrayUrl: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=900&q=80',
+      xrayUrl: 'https://www.bhf.org.uk/-/media/images/information-support/tests/chest-x-ray/normal-chest-x-ray-620x400.jpg?rev=d9cfde6ea0a249649d60284ae972f2da&la=en&h=400&w=620&hash=62E952C7382859AF3089F12EAC596D40',
     },
     {
       id: 'p2',
@@ -24,7 +24,7 @@
         'Check tube position and seal for leaks.',
         'Advance oxygen weaning as tolerated.',
       ],
-      xrayUrl: 'https://images.unsplash.com/photo-1580281657521-7f22c1c4954f?auto=format&fit=crop&w=900&q=80',
+      xrayUrl: 'https://i0.wp.com/cdn-prod.medicalnewstoday.com/content/images/articles/219/219970/x-ray-skull-from-right-side.jpg?w=1155&h=1470',
     },
     {
       id: 'p3',
@@ -36,13 +36,24 @@
         'Perform neurovascular checks per limb.',
         'Encourage assisted weight-bearing today.',
       ],
-      xrayUrl: 'https://images.unsplash.com/photo-1585155772512-127c287f0b5d?auto=format&fit=crop&w=900&q=80',
+      xrayUrl: 'https://www.cmelist.com/wp-content/uploads/2025/11/emergency-medicine-sample-question-1-768x376.jpg',
     },
   ];
 
   var state = {
     currentPatient: null,
     viewer: { scale: 1, x: 0, y: 0 },
+    headControl: {
+      supported: typeof DeviceOrientationEvent !== 'undefined',
+      active: false,
+      neutral: null,
+      sensitivity: { x: 0.14, y: 0.12 },
+      deadZone: { x: 4, y: 4 },
+    },
+    gestureControl: {
+      active: false,
+      eventNames: ['neurobandgesture', 'emggesture', 'gesturecontrol'],
+    },
   };
 
   var screens = {};
@@ -134,7 +145,7 @@
 
   function populateDetail(patient) {
     state.currentPatient = patient;
-    state.viewer = { scale: 1, x: 0, y: 0 };
+    state.viewer = { scale: 1.4, x: 0, y: 0 };
 
     document.getElementById('detail-name').textContent = patient.name;
     document.getElementById('detail-procedure').textContent = patient.procedure;
@@ -158,10 +169,83 @@
     updateViewer();
   }
 
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
   function updateViewer() {
     var image = document.getElementById('xray-image');
     if (!image) return;
     image.style.transform = 'translate(' + state.viewer.x + 'px, ' + state.viewer.y + 'px) scale(' + state.viewer.scale + ')';
+  }
+
+  function onHeadOrientation(event) {
+    if (!state.headControl.active || state.currentScreen !== 'detail') return;
+    if (event.beta === null || event.gamma === null) return;
+
+    if (!state.headControl.neutral) {
+      state.headControl.neutral = { beta: event.beta, gamma: event.gamma };
+      return;
+    }
+
+    var deltaX = event.gamma - state.headControl.neutral.gamma;
+    var deltaY = event.beta - state.headControl.neutral.beta;
+
+    if (Math.abs(deltaX) < state.headControl.deadZone.x) deltaX = 0;
+    if (Math.abs(deltaY) < state.headControl.deadZone.y) deltaY = 0;
+
+    var panX = clamp(deltaX * state.headControl.sensitivity.x, -24, 24);
+    var panY = clamp(deltaY * state.headControl.sensitivity.y, -18, 18);
+
+    if (panX || panY) {
+      state.viewer.x += panX;
+      state.viewer.y += panY;
+      updateViewer();
+    }
+  }
+
+  function handleGestureZoom(event) {
+    var detail = event.detail || {};
+    var gesture = detail.gesture || detail.name || detail.type || event.type;
+    if (!gesture) return;
+
+    gesture = String(gesture).toLowerCase().trim();
+
+    if (gesture === 'zoom-in' || gesture === 'zoom_in' || gesture === 'pinch-open' || gesture === 'spread' || gesture === 'expand') {
+      zoom(0.2);
+    } else if (gesture === 'zoom-out' || gesture === 'zoom_out' || gesture === 'pinch-close' || gesture === 'pinch' || gesture === 'contract') {
+      zoom(-0.2);
+    }
+  }
+
+  function startGestureControl() {
+    if (state.gestureControl.active) return;
+    state.gestureControl.active = true;
+    state.gestureControl.eventNames.forEach(function(name) {
+      window.addEventListener(name, handleGestureZoom);
+    });
+  }
+
+  function stopGestureControl() {
+    if (!state.gestureControl.active) return;
+    state.gestureControl.active = false;
+    state.gestureControl.eventNames.forEach(function(name) {
+      window.removeEventListener(name, handleGestureZoom);
+    });
+  }
+
+  function startHeadNavigation() {
+    if (!state.headControl.supported || state.headControl.active) return;
+    state.headControl.active = true;
+    state.headControl.neutral = null;
+    window.addEventListener('deviceorientation', onHeadOrientation);
+  }
+
+  function stopHeadNavigation() {
+    if (!state.headControl.active) return;
+    state.headControl.active = false;
+    window.removeEventListener('deviceorientation', onHeadOrientation);
+    state.headControl.neutral = null;
   }
 
   function zoom(delta) {
@@ -176,7 +260,8 @@
   }
 
   function resetView() {
-    state.viewer = { scale: 1, x: 0, y: 0 };
+    state.viewer = { scale: 1.4, x: 0, y: 0 };
+    state.headControl.neutral = null;
     updateViewer();
   }
 
@@ -222,6 +307,11 @@
   function onScreenEnter(screenId) {
     if (screenId === 'home') {
       renderPatientList();
+      stopHeadNavigation();
+      stopGestureControl();
+    } else if (screenId === 'detail') {
+      startHeadNavigation();
+      startGestureControl();
     }
   }
 

@@ -118,6 +118,7 @@ Use the plugin's publish skill to generate a QR code. Scan it with your phone to
 See the `examples/` directory for sample apps:
 
 - **Snake** — Classic snake game with D-pad controls and high scores
+- **Neuraband Gesture Demo** — Visualizes common Neuraband gestures with live counters and simple on-screen feedback
 
 ## Multi-Tool Support
 
