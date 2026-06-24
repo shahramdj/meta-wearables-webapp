@@ -3,9 +3,11 @@
 
   var CONFIG_STORAGE_KEY = 'mdg_patient_dashboard_config_v1';
   var LEGACY_FHIR_BASE_URL = 'http://192.168.40.24:8081/fhir';
+  var PROXY_FHIR_BASE_URL = '/fhir';
+  var RENDER_FHIR_BASE_URL = 'https://fhir-backend-microservice-1.onrender.com/fhir';
 
   var DEFAULT_CONFIG = {
-    fhirBaseUrl: '/fhir',
+    fhirBaseUrl: RENDER_FHIR_BASE_URL,
     patientIds: ['pat-001', 'pat-002', 'pat-003', 'pat-004', 'pat-005'],
   };
 
@@ -35,7 +37,7 @@
       var raw = localStorage.getItem(CONFIG_STORAGE_KEY);
       if (!raw) return {};
       var parsed = JSON.parse(raw);
-      if (parsed && parsed.fhirBaseUrl === LEGACY_FHIR_BASE_URL) {
+      if (parsed && (parsed.fhirBaseUrl === LEGACY_FHIR_BASE_URL || parsed.fhirBaseUrl === PROXY_FHIR_BASE_URL)) {
         parsed.fhirBaseUrl = DEFAULT_CONFIG.fhirBaseUrl;
       }
       return parsed && typeof parsed === 'object' ? parsed : {};
@@ -418,7 +420,7 @@
         }
       })
       .catch(function(error) {
-        setError('FHIR request failed. Use the local proxy server and keep FHIR Base URL set to /fhir.');
+        setError('FHIR request failed. Check your Render URL and deployment status.');
         setStatus('Connection failed');
         throw error;
       })
