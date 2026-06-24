@@ -110,11 +110,11 @@
         <div class="card settings-card">
           <div class="section-title">FHIR Mock Server</div>
           <label class="field-label" for="config-fhir-base">FHIR Base URL</label>
-          <input id="config-fhir-base" class="text-input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="http://192.168.40.24:8081/fhir">
+          <input id="config-fhir-base" class="text-input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="/fhir">
 
           <label class="field-label" for="config-patient-ids">Patient IDs (comma or newline separated)</label>
           <textarea id="config-patient-ids" class="text-input focusable config-textarea" rows="4" placeholder="pat-001, pat-002, pat-003"></textarea>
-          <div class="config-hint">Example: pat-001, pat-002, pat-003</div>
+          <div class="config-hint">Use /fhir for local proxy testing. Example patient IDs: pat-001, pat-002, pat-003</div>
         </div>
       </div>
       <nav class="nav-bar">

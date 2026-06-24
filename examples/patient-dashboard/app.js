@@ -2,9 +2,10 @@
   'use strict';
 
   var CONFIG_STORAGE_KEY = 'mdg_patient_dashboard_config_v1';
+  var LEGACY_FHIR_BASE_URL = 'http://192.168.40.24:8081/fhir';
 
   var DEFAULT_CONFIG = {
-    fhirBaseUrl: 'http://192.168.40.24:8081/fhir',
+    fhirBaseUrl: '/fhir',
     patientIds: ['pat-001', 'pat-002', 'pat-003', 'pat-004', 'pat-005'],
   };
 
@@ -34,6 +35,9 @@
       var raw = localStorage.getItem(CONFIG_STORAGE_KEY);
       if (!raw) return {};
       var parsed = JSON.parse(raw);
+      if (parsed && parsed.fhirBaseUrl === LEGACY_FHIR_BASE_URL) {
+        parsed.fhirBaseUrl = DEFAULT_CONFIG.fhirBaseUrl;
+      }
       return parsed && typeof parsed === 'object' ? parsed : {};
     } catch (error) {
       return {};
@@ -168,12 +172,19 @@
   }
 
   function requestJson(url) {
-    return fetch(url).then(function(response) {
-      if (!response.ok) {
-        throw new Error('HTTP ' + response.status + ' for ' + url);
-      }
-      return response.json();
-    });
+    return fetch(url)
+      .then(function(response) {
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status + ' for ' + url);
+        }
+        return response.json();
+      })
+      .catch(function(error) {
+        if (error && error.name === 'TypeError') {
+          throw new Error('Network/CORS error while requesting ' + url);
+        }
+        throw error;
+      });
   }
 
   function shortText(value) {
@@ -407,7 +418,7 @@
         }
       })
       .catch(function(error) {
-        setError('FHIR request failed. Check FHIR base URL, CORS, and mock server status.');
+        setError('FHIR request failed. Use the local proxy server and keep FHIR Base URL set to /fhir.');
         setStatus('Connection failed');
         throw error;
       })
