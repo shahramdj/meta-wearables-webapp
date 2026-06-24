@@ -1,59 +1,71 @@
 (function() {
   'use strict';
 
-  var patients = [
-    {
-      id: 'p1',
-      name: 'Mia Chen',
-      procedure: 'Appendectomy',
-      vitals: { hr: '82 bpm', bp: '118/76', spo2: '98%', temp: '36.8°C' },
-      recommendations: [
-        'Monitor abdominal tenderness hourly.',
-        'Maintain IV fluids and reassess pain control.',
-        'Encourage deep breathing and early mobilization.',
-      ],
-      xrayUrl: 'https://www.bhf.org.uk/-/media/images/information-support/tests/chest-x-ray/normal-chest-x-ray-620x400.jpg?rev=d9cfde6ea0a249649d60284ae972f2da&la=en&h=400&w=620&hash=62E952C7382859AF3089F12EAC596D40',
-    },
-    {
-      id: 'p2',
-      name: 'Noah Silva',
-      procedure: 'Chest tube placement',
-      vitals: { hr: '90 bpm', bp: '124/80', spo2: '95%', temp: '37.1°C' },
-      recommendations: [
-        'Evaluate drainage output every 4 hours.',
-        'Check tube position and seal for leaks.',
-        'Advance oxygen weaning as tolerated.',
-      ],
-      xrayUrl: 'https://i0.wp.com/cdn-prod.medicalnewstoday.com/content/images/articles/219/219970/x-ray-skull-from-right-side.jpg?w=1155&h=1470',
-    },
-    {
-      id: 'p3',
-      name: 'Lina Patel',
-      procedure: 'Hip replacement',
-      vitals: { hr: '78 bpm', bp: '112/72', spo2: '99%', temp: '36.6°C' },
-      recommendations: [
-        'Continue anticoagulation protocol.',
-        'Perform neurovascular checks per limb.',
-        'Encourage assisted weight-bearing today.',
-      ],
-      xrayUrl: 'https://www.cmelist.com/wp-content/uploads/2025/11/emergency-medicine-sample-question-1-768x376.jpg',
-    },
-  ];
+  var CONFIG_STORAGE_KEY = 'mdg_patient_dashboard_config_v1';
+
+  var DEFAULT_CONFIG = {
+    apiBaseUrl: 'http://192.168.40.24:8080',
+    apiPrefix: '/api',
+    fhirBaseUrl: 'http://192.168.40.24:8081/fhir',
+    patientIds: ['pat-001', 'pat-002', 'pat-003', 'pat-004', 'pat-005'],
+  };
+
+  var RUNTIME_CONFIG = window.PATIENT_DASHBOARD_CONFIG || {};
+
+  function sanitizePatientIds(value) {
+    if (Array.isArray(value)) {
+      return value.map(function(id) { return String(id).trim(); }).filter(Boolean);
+    }
+
+    return String(value || '')
+      .split(/[\n,]/)
+      .map(function(id) { return id.trim(); })
+      .filter(Boolean);
+  }
+
+  function buildConfig(source) {
+    var patientIds = sanitizePatientIds(source && source.patientIds);
+    return {
+      apiBaseUrl: source && source.apiBaseUrl ? String(source.apiBaseUrl).trim() : DEFAULT_CONFIG.apiBaseUrl,
+      apiPrefix: source && source.apiPrefix ? String(source.apiPrefix).trim() : DEFAULT_CONFIG.apiPrefix,
+      fhirBaseUrl: source && source.fhirBaseUrl ? String(source.fhirBaseUrl).trim() : DEFAULT_CONFIG.fhirBaseUrl,
+      patientIds: patientIds.length ? patientIds : DEFAULT_CONFIG.patientIds.slice(),
+    };
+  }
+
+  function loadStoredConfig() {
+    try {
+      var raw = localStorage.getItem(CONFIG_STORAGE_KEY);
+      if (!raw) return {};
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function persistConfig(config) {
+    try {
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+    } catch (error) {
+      console.warn('Could not persist endpoint config:', error);
+    }
+  }
+
+  var CONFIG = buildConfig(Object.assign({}, RUNTIME_CONFIG, loadStoredConfig()));
+
+  var FALLBACK_XRAY =
+    'data:image/svg+xml;utf8,' +
+    encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="100%" height="100%" fill="#121826"/><circle cx="256" cy="180" r="86" fill="#8b949f" opacity="0.55"/><ellipse cx="182" cy="290" rx="70" ry="118" fill="#8b949f" opacity="0.42"/><ellipse cx="330" cy="290" rx="70" ry="118" fill="#8b949f" opacity="0.42"/><text x="256" y="470" text-anchor="middle" font-family="Arial" font-size="26" fill="#d0d6df">Image unavailable</text></svg>');
 
   var state = {
+    currentScreen: null,
     currentPatient: null,
+    patients: [],
+    contextCache: {},
+    mediaCache: {},
+    isLoading: false,
     viewer: { scale: 1, x: 0, y: 0 },
-    headControl: {
-      supported: typeof DeviceOrientationEvent !== 'undefined',
-      active: false,
-      neutral: null,
-      sensitivity: { x: 0.14, y: 0.12 },
-      deadZone: { x: 4, y: 4 },
-    },
-    gestureControl: {
-      active: false,
-      eventNames: ['neurobandgesture', 'emggesture', 'gesturecontrol'],
-    },
   };
 
   var screens = {};
@@ -66,9 +78,6 @@
 
   function navigateTo(screenId, options) {
     options = options || {};
-    if (options.addToHistory !== false && state.currentScreen) {
-      state.previousScreen = state.currentScreen;
-    }
     Object.values(screens).forEach(function(screen) { screen.classList.add('hidden'); });
     if (screens[screenId]) {
       screens[screenId].classList.remove('hidden');
@@ -80,6 +89,11 @@
 
   function navigateBack() {
     if (state.currentScreen === 'detail') {
+      navigateTo('home', { addToHistory: false });
+      return;
+    }
+
+    if (state.currentScreen === 'settings') {
       navigateTo('home', { addToHistory: false });
     }
   }
@@ -107,28 +121,202 @@
       nextIndex = index < focusables.length - 1 ? index + 1 : 0;
     }
     focusables[nextIndex].focus();
-    var scrollParent = focusables[nextIndex].closest('.content, .patient-grid, .viewer-controls');
+    var scrollParent = focusables[nextIndex].closest('.content, .patient-grid, .viewer-controls, .nav-bar');
     if (scrollParent) {
       focusables[nextIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
+  }
+
+  function normalizeBaseUrl(url) {
+    return String(url || '').replace(/\/$/, '');
+  }
+
+  function apiUrl(path) {
+    return normalizeBaseUrl(CONFIG.apiBaseUrl) + CONFIG.apiPrefix + path;
+  }
+
+  function fhirUrl(path) {
+    return normalizeBaseUrl(CONFIG.fhirBaseUrl) + path;
+  }
+
+  function setStatus(message) {
+    var el = document.getElementById('home-meta');
+    if (el) {
+      el.textContent = message;
+    }
+  }
+
+  function setLoading(loading, text) {
+    state.isLoading = loading;
+    var loadingEl = document.getElementById('loading');
+    var textEl = loadingEl ? loadingEl.querySelector('.loading-text') : null;
+    if (textEl && text) {
+      textEl.textContent = text;
+    }
+    if (loadingEl) {
+      loadingEl.classList.toggle('hidden', !loading);
+    }
+  }
+
+  function setError(message) {
+    var errorEl = document.getElementById('error');
+    if (!errorEl) return;
+    var msgEl = errorEl.querySelector('.error-message');
+    if (msgEl) {
+      msgEl.textContent = message;
+    }
+    errorEl.classList.remove('hidden');
+  }
+
+  function clearError() {
+    var errorEl = document.getElementById('error');
+    if (errorEl) {
+      errorEl.classList.add('hidden');
+    }
+  }
+
+  function requestJson(url) {
+    return fetch(url).then(function(response) {
+      if (!response.ok) {
+        throw new Error('HTTP ' + response.status + ' for ' + url);
+      }
+      return response.json();
+    });
+  }
+
+  function shortText(value) {
+    if (value === undefined || value === null) return '--';
+    var text = String(value);
+    return text.length > 32 ? text.slice(0, 29) + '...' : text;
+  }
+
+  function getConfigInputs() {
+    return {
+      apiBase: document.getElementById('config-api-base'),
+      fhirBase: document.getElementById('config-fhir-base'),
+      patientIds: document.getElementById('config-patient-ids'),
+    };
+  }
+
+  function fillConfigForm(config) {
+    var inputs = getConfigInputs();
+    if (!inputs.apiBase || !inputs.fhirBase || !inputs.patientIds) return;
+    inputs.apiBase.value = config.apiBaseUrl;
+    inputs.fhirBase.value = config.fhirBaseUrl;
+    inputs.patientIds.value = (config.patientIds || []).join(', ');
+  }
+
+  function readConfigForm() {
+    var inputs = getConfigInputs();
+    if (!inputs.apiBase || !inputs.fhirBase || !inputs.patientIds) {
+      return buildConfig(CONFIG);
+    }
+
+    return buildConfig({
+      apiBaseUrl: inputs.apiBase.value,
+      apiPrefix: '/api',
+      fhirBaseUrl: inputs.fhirBase.value,
+      patientIds: sanitizePatientIds(inputs.patientIds.value),
+    });
+  }
+
+  function applyConfig(config, options) {
+    options = options || {};
+    CONFIG = buildConfig(config);
+
+    if (options.persist) {
+      persistConfig(CONFIG);
+    }
+
+    state.currentPatient = null;
+    state.patients = [];
+    state.contextCache = {};
+    state.mediaCache = {};
+
+    renderPatientList();
+    setStatus('Endpoints updated');
+
+    if (options.reload !== false) {
+      navigateTo('home', { addToHistory: false });
+      loadPatientSummaries();
+    }
+  }
+
+  function firstValue(array, field) {
+    if (!Array.isArray(array) || !array.length) return null;
+    return array[0] && array[0][field];
+  }
+
+  function loadPatientSummaries() {
+    setLoading(true, 'Loading patient records...');
+    clearError();
+    setStatus('Loading...');
+
+    var introCopy = document.getElementById('intro-copy');
+    if (introCopy) {
+      introCopy.textContent = 'Connecting to ' + normalizeBaseUrl(CONFIG.apiBaseUrl) + CONFIG.apiPrefix;
+    }
+
+    var requests = CONFIG.patientIds.map(function(id) {
+      return requestJson(apiUrl('/patient/' + encodeURIComponent(id) + '/summary'));
+    });
+
+    return Promise.allSettled(requests)
+      .then(function(results) {
+        state.patients = results
+          .filter(function(result) { return result.status === 'fulfilled'; })
+          .map(function(result) { return result.value; });
+
+        renderPatientList();
+
+        var failedCount = results.length - state.patients.length;
+        if (!state.patients.length) {
+          throw new Error('No patient summaries returned from microservice');
+        }
+
+        if (failedCount > 0) {
+          setStatus(state.patients.length + ' loaded, ' + failedCount + ' failed');
+        } else {
+          setStatus(state.patients.length + ' patients');
+        }
+      })
+      .catch(function(error) {
+        setError('Backend request failed. Check API base URL, CORS, and service status.');
+        setStatus('Connection failed');
+        throw error;
+      })
+      .finally(function() {
+        setLoading(false);
+      });
   }
 
   function renderPatientList() {
     var list = document.getElementById('patient-list');
     if (!list) return;
     list.innerHTML = '';
-    patients.forEach(function(patient) {
+
+    if (!state.patients.length) {
+      var empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No patients found. Press Reload after the backend starts.';
+      list.appendChild(empty);
+      return;
+    }
+
+    state.patients.forEach(function(patient) {
       var card = document.createElement('div');
       card.className = 'patient-card';
 
       var title = document.createElement('div');
       title.className = 'patient-card-title';
-      title.textContent = patient.name;
+      title.textContent = shortText(patient.demographics && patient.demographics.name) || patient.id;
       card.appendChild(title);
 
       var meta = document.createElement('div');
       meta.className = 'patient-meta';
-      meta.textContent = patient.procedure;
+      var gender = shortText(patient.demographics && patient.demographics.gender);
+      var age = patient.age !== undefined && patient.age !== null ? patient.age + 'y' : '--';
+      meta.textContent = 'ID: ' + patient.id + ' | ' + gender + ' | ' + age;
       card.appendChild(meta);
 
       var button = document.createElement('button');
@@ -136,37 +324,18 @@
       button.dataset.action = 'view-patient';
       button.dataset.patientId = patient.id;
       button.type = 'button';
-      button.textContent = 'View X-ray';
+      button.textContent = 'Open Case';
       card.appendChild(button);
 
       list.appendChild(card);
     });
   }
 
-  function populateDetail(patient) {
-    state.currentPatient = patient;
-    state.viewer = { scale: 1.4, x: 0, y: 0 };
-
-    document.getElementById('detail-name').textContent = patient.name;
-    document.getElementById('detail-procedure').textContent = patient.procedure;
-    document.getElementById('vital-hr').textContent = patient.vitals.hr;
-    document.getElementById('vital-bp').textContent = patient.vitals.bp;
-    document.getElementById('vital-spo2').textContent = patient.vitals.spo2;
-    document.getElementById('vital-temp').textContent = patient.vitals.temp;
-
-    var recommendations = document.getElementById('ai-recommendations');
-    recommendations.innerHTML = '';
-    patient.recommendations.forEach(function(text) {
-      var chip = document.createElement('div');
-      chip.className = 'recommendation-chip';
-      chip.textContent = text;
-      recommendations.appendChild(chip);
-    });
-
-    var image = document.getElementById('xray-image');
-    image.src = patient.xrayUrl;
-    image.alt = patient.name + ' X-ray';
-    updateViewer();
+  function readBundleEntries(bundle) {
+    if (!bundle || !Array.isArray(bundle.entry)) return [];
+    return bundle.entry
+      .map(function(entry) { return entry && entry.resource ? entry.resource : null; })
+      .filter(Boolean);
   }
 
   function clamp(value, min, max) {
@@ -179,73 +348,159 @@
     image.style.transform = 'translate(' + state.viewer.x + 'px, ' + state.viewer.y + 'px) scale(' + state.viewer.scale + ')';
   }
 
-  function onHeadOrientation(event) {
-    if (!state.headControl.active || state.currentScreen !== 'detail') return;
-    if (event.beta === null || event.gamma === null) return;
+  function renderHighlights(context) {
+    var recommendations = document.getElementById('ai-recommendations');
+    if (!recommendations) return;
 
-    if (!state.headControl.neutral) {
-      state.headControl.neutral = { beta: event.beta, gamma: event.gamma };
+    var highlights = [];
+    var topProcedure = firstValue(context.procedures, 'description');
+    var topAllergy = firstValue(context.allergies, 'substance');
+    var topMedication = firstValue(context.medications, 'medication');
+    var topCondition = firstValue(context.conditions, 'description');
+
+    if (topProcedure) highlights.push('Procedure: ' + topProcedure);
+    if (topCondition) highlights.push('Condition: ' + topCondition);
+    if (topMedication) highlights.push('Medication: ' + topMedication);
+    if (topAllergy) highlights.push('Allergy: ' + topAllergy);
+    if (!highlights.length) highlights.push('No highlights returned by microservice.');
+
+    recommendations.innerHTML = '';
+    highlights.slice(0, 4).forEach(function(text) {
+      var chip = document.createElement('div');
+      chip.className = 'recommendation-chip';
+      chip.textContent = text;
+      recommendations.appendChild(chip);
+    });
+  }
+
+  function setImageHint(text) {
+    var hint = document.getElementById('viewer-hint');
+    if (hint) {
+      hint.textContent = text;
+    }
+  }
+
+  function setImageSource(url, alt) {
+    var image = document.getElementById('xray-image');
+    if (!image) return;
+    image.src = url;
+    image.alt = alt;
+    image.onerror = function() {
+      image.onerror = null;
+      image.src = FALLBACK_XRAY;
+      setImageHint('Image unavailable from FHIR endpoint. Showing fallback.');
+      state.viewer = { scale: 1, x: 0, y: 0 };
+      updateViewer();
+    };
+  }
+
+  function loadMedicalImage(patientId) {
+    if (state.mediaCache[patientId]) {
+      return Promise.resolve(state.mediaCache[patientId]);
+    }
+
+    return requestJson(fhirUrl('/Media?patient=' + encodeURIComponent(patientId)))
+      .then(function(bundle) {
+        var resources = readBundleEntries(bundle);
+        var firstMedia = resources[0] || null;
+        if (!firstMedia || !firstMedia.id) {
+          throw new Error('No FHIR Media record found for ' + patientId);
+        }
+
+        var result = {
+          mediaId: firstMedia.id,
+          imageUrl: fhirUrl('/Media/' + encodeURIComponent(firstMedia.id)),
+          modality: firstMedia.modality && firstMedia.modality.text ? firstMedia.modality.text : 'XRAY',
+        };
+        state.mediaCache[patientId] = result;
+        return result;
+      });
+  }
+
+  function loadPatientContext(patientId) {
+    if (state.contextCache[patientId]) {
+      return Promise.resolve(state.contextCache[patientId]);
+    }
+
+    return requestJson(apiUrl('/patient-context/' + encodeURIComponent(patientId)))
+      .then(function(context) {
+        state.contextCache[patientId] = context;
+        return context;
+      });
+  }
+
+  function populateDetail(summary, context, imageInfo) {
+    state.currentPatient = summary;
+    state.viewer = { scale: 1.4, x: 0, y: 0 };
+
+    var detailName = (summary.demographics && summary.demographics.name) || summary.id;
+    document.getElementById('detail-name').textContent = detailName;
+
+    var topProcedure = firstValue(context.procedures, 'description') || 'No procedure';
+    document.getElementById('detail-procedure').textContent = shortText(topProcedure);
+
+    document.getElementById('vital-hr').textContent = summary.age !== undefined && summary.age !== null ? String(summary.age) : '--';
+    document.getElementById('vital-bp').textContent = shortText(summary.sex || '--');
+
+    var topLab = firstValue(context.recentLabs, 'test');
+    var topImaging = firstValue(context.imaging, 'modality') || firstValue(context.imaging, 'description');
+
+    document.getElementById('vital-spo2').textContent = shortText(topLab || '--');
+    document.getElementById('vital-temp').textContent = shortText(topImaging || '--');
+
+    renderHighlights(context);
+
+    if (imageInfo && imageInfo.imageUrl) {
+      setImageSource(imageInfo.imageUrl, detailName + ' medical image');
+      setImageHint('Image source: ' + shortText(imageInfo.mediaId) + ' (' + shortText(imageInfo.modality) + ')');
+    } else {
+      setImageSource(FALLBACK_XRAY, detailName + ' medical image unavailable');
+      setImageHint('FHIR media endpoint unavailable. Showing fallback image.');
+    }
+
+    updateViewer();
+  }
+
+  function openPatient(patientId) {
+    var summary = state.patients.find(function(item) { return item.id === patientId; });
+    if (!summary) {
       return;
     }
 
-    var deltaX = event.gamma - state.headControl.neutral.gamma;
-    var deltaY = event.beta - state.headControl.neutral.beta;
+    setStatus('Loading case ' + patientId + '...');
+    clearError();
 
-    if (Math.abs(deltaX) < state.headControl.deadZone.x) deltaX = 0;
-    if (Math.abs(deltaY) < state.headControl.deadZone.y) deltaY = 0;
+    Promise.allSettled([
+      loadPatientContext(patientId),
+      loadMedicalImage(patientId),
+    ]).then(function(results) {
+      var contextResult = results[0];
+      var imageResult = results[1];
 
-    var panX = clamp(deltaX * state.headControl.sensitivity.x, -24, 24);
-    var panY = clamp(deltaY * state.headControl.sensitivity.y, -18, 18);
+      if (contextResult.status !== 'fulfilled') {
+        throw contextResult.reason || new Error('Failed to load patient context');
+      }
 
-    if (panX || panY) {
-      state.viewer.x += panX;
-      state.viewer.y += panY;
-      updateViewer();
-    }
-  }
-
-  function handleGestureZoom(event) {
-    var detail = event.detail || {};
-    var gesture = detail.gesture || detail.name || detail.type || event.type;
-    if (!gesture) return;
-
-    gesture = String(gesture).toLowerCase().trim();
-
-    if (gesture === 'zoom-in' || gesture === 'zoom_in' || gesture === 'pinch-open' || gesture === 'spread' || gesture === 'expand') {
-      zoom(0.2);
-    } else if (gesture === 'zoom-out' || gesture === 'zoom_out' || gesture === 'pinch-close' || gesture === 'pinch' || gesture === 'contract') {
-      zoom(-0.2);
-    }
-  }
-
-  function startGestureControl() {
-    if (state.gestureControl.active) return;
-    state.gestureControl.active = true;
-    state.gestureControl.eventNames.forEach(function(name) {
-      window.addEventListener(name, handleGestureZoom);
+      var context = contextResult.value;
+      var imageInfo = imageResult.status === 'fulfilled' ? imageResult.value : null;
+      populateDetail(summary, context, imageInfo);
+      navigateTo('detail', { addToHistory: false });
+      setStatus('Case ready');
+    }).catch(function(error) {
+      setError('Could not load full patient case. ' + (error && error.message ? error.message : '')); 
+      setStatus('Case load failed');
     });
   }
 
-  function stopGestureControl() {
-    if (!state.gestureControl.active) return;
-    state.gestureControl.active = false;
-    state.gestureControl.eventNames.forEach(function(name) {
-      window.removeEventListener(name, handleGestureZoom);
-    });
-  }
+  function reloadDetail() {
+    if (!state.currentPatient || !state.currentPatient.id) {
+      return;
+    }
 
-  function startHeadNavigation() {
-    if (!state.headControl.supported || state.headControl.active) return;
-    state.headControl.active = true;
-    state.headControl.neutral = null;
-    window.addEventListener('deviceorientation', onHeadOrientation);
-  }
-
-  function stopHeadNavigation() {
-    if (!state.headControl.active) return;
-    state.headControl.active = false;
-    window.removeEventListener('deviceorientation', onHeadOrientation);
-    state.headControl.neutral = null;
+    var patientId = state.currentPatient.id;
+    delete state.contextCache[patientId];
+    delete state.mediaCache[patientId];
+    openPatient(patientId);
   }
 
   function zoom(delta) {
@@ -261,22 +516,37 @@
 
   function resetView() {
     state.viewer = { scale: 1.4, x: 0, y: 0 };
-    state.headControl.neutral = null;
     updateViewer();
   }
 
   function handleAction(action, element) {
     switch (action) {
       case 'view-patient':
-        var patientId = element.dataset.patientId;
-        var patient = patients.find(function(item) { return item.id === patientId; });
-        if (patient) {
-          populateDetail(patient);
-          navigateTo('detail', { addToHistory: false });
-        }
+        openPatient(element.dataset.patientId);
         break;
       case 'back':
         navigateBack();
+        break;
+      case 'reload-patients':
+        loadPatientSummaries();
+        break;
+      case 'open-settings':
+        fillConfigForm(CONFIG);
+        navigateTo('settings', { addToHistory: false });
+        break;
+      case 'save-config':
+        persistConfig(readConfigForm());
+        setStatus('Configuration saved');
+        break;
+      case 'apply-config':
+        applyConfig(readConfigForm(), { persist: true, reload: true });
+        break;
+      case 'reset-config':
+        applyConfig(DEFAULT_CONFIG, { persist: true, reload: true });
+        fillConfigForm(CONFIG);
+        break;
+      case 'reload-detail':
+        reloadDetail();
         break;
       case 'zoom-in':
         zoom(0.2);
@@ -305,13 +575,13 @@
   }
 
   function onScreenEnter(screenId) {
-    if (screenId === 'home') {
-      renderPatientList();
-      stopHeadNavigation();
-      stopGestureControl();
-    } else if (screenId === 'detail') {
-      startHeadNavigation();
-      startGestureControl();
+    if (screenId === 'home' && !state.patients.length && !state.isLoading) {
+      loadPatientSummaries();
+      return;
+    }
+
+    if (screenId === 'settings') {
+      fillConfigForm(CONFIG);
     }
   }
 
@@ -325,7 +595,15 @@
     document.addEventListener('keydown', function(event) {
       var active = document.activeElement;
       var isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
-      if (isInput && !['Escape', 'Enter'].includes(event.key)) return;
+
+      if (isInput) {
+        if (event.key === 'Escape') {
+          navigateBack();
+          event.preventDefault();
+        }
+        return;
+      }
+
       switch (event.key) {
         case 'ArrowUp':
           moveFocus('up');
@@ -361,7 +639,7 @@
   function init() {
     collectScreens();
     setupEvents();
-    onScreenEnter('home');
+    fillConfigForm(CONFIG);
     navigateTo('home', { addToHistory: false });
   }
 

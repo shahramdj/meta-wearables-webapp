@@ -3,25 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
-  <meta name="description" content="Patient dashboard for Meta Display Glasses with vitals, procedure, AI recommendations, and X-ray viewer.">
+  <meta name="description" content="Microservice-backed patient dashboard for Meta Display Glasses with live context and medical image viewer.">
   <meta name="mrbd-web-app-capable" content="yes">
-  <title>Patient Dashboard</title>
+  <title>FHIR Patient Dashboard</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app">
     <div id="home" class="screen">
       <header class="header">
-        <h1>Patient Dashboard</h1>
-        <span class="header-meta" id="home-meta">3 patients</span>
+        <h1>FHIR Dashboard</h1>
+        <span class="header-meta" id="home-meta">Connecting...</span>
       </header>
       <div class="content">
         <div class="intro card">
-          <div class="intro-title">Today's rounds</div>
-          <div class="intro-copy">Select a patient to review procedure details, vitals, AI guidance, and an X-ray viewer.</div>
+          <div class="intro-title">Microservice Feed</div>
+          <div class="intro-copy" id="intro-copy">Loading patient summaries from backend microservice.</div>
+        </div>
+        <div id="loading" class="loading-container hidden">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading patient records...</div>
+        </div>
+        <div id="error" class="error-container hidden">
+          <div class="error-icon">&#9888;</div>
+          <div class="error-message">Unable to load data</div>
         </div>
         <div class="patient-grid" id="patient-list"></div>
       </div>
+      <nav class="nav-bar">
+        <button class="nav-item focusable" data-action="reload-patients">Reload</button>
+        <button class="nav-item focusable" data-action="open-settings">Endpoints</button>
+      </nav>
     </div>
 
     <div id="detail" class="screen hidden">
@@ -35,31 +47,31 @@
       <div class="content">
         <div class="detail-grid">
           <div class="card vitals-card">
-            <div class="section-title">Vital Signs</div>
+            <div class="section-title">Patient Snapshot</div>
             <div class="vitals-row">
               <div class="vital-block">
-                <div class="vital-label">HR</div>
+                <div class="vital-label">Age</div>
                 <div class="vital-value" id="vital-hr">--</div>
               </div>
               <div class="vital-block">
-                <div class="vital-label">BP</div>
+                <div class="vital-label">Sex</div>
                 <div class="vital-value" id="vital-bp">--</div>
               </div>
             </div>
             <div class="vitals-row">
               <div class="vital-block">
-                <div class="vital-label">SpO₂</div>
+                <div class="vital-label">Top Lab</div>
                 <div class="vital-value" id="vital-spo2">--</div>
               </div>
               <div class="vital-block">
-                <div class="vital-label">Temp</div>
+                <div class="vital-label">Imaging</div>
                 <div class="vital-value" id="vital-temp">--</div>
               </div>
             </div>
           </div>
 
           <div class="card ai-card">
-            <div class="section-title">AI Recommendations</div>
+            <div class="section-title">Clinical Highlights</div>
             <div id="ai-recommendations" class="recommendations"></div>
           </div>
         </div>
@@ -71,7 +83,7 @@
               <img id="xray-image" src="" alt="X-ray image" draggable="false">
             </div>
           </div>
-          <div class="viewer-hint">Use zoom buttons, neuroband pinch gestures, or tilt your head to pan the image.</div>
+          <div class="viewer-hint" id="viewer-hint">Image source: waiting for media endpoint.</div>
           <div class="viewer-controls">
             <button class="nav-item focusable" data-action="zoom-out">Zoom -</button>
             <button class="nav-item focusable" data-action="zoom-in">Zoom +</button>
@@ -80,9 +92,39 @@
             <button class="nav-item focusable" data-action="pan-up">▲</button>
             <button class="nav-item focusable" data-action="pan-down">▼</button>
             <button class="nav-item focusable primary" data-action="reset-view">Reset</button>
+            <button class="nav-item focusable" data-action="reload-detail">Refresh</button>
           </div>
         </div>
       </div>
+    </div>
+
+    <div id="settings" class="screen hidden">
+      <header class="header">
+        <button class="back-btn focusable" data-action="back">&#8592;</button>
+        <div>
+          <h1>Endpoint Config</h1>
+          <div class="header-meta">Persisted in localStorage</div>
+        </div>
+      </header>
+      <div class="content">
+        <div class="card settings-card">
+          <div class="section-title">Connection</div>
+          <label class="field-label" for="config-api-base">API Base URL</label>
+          <input id="config-api-base" class="text-input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="http://192.168.40.24:8080">
+
+          <label class="field-label" for="config-fhir-base">FHIR Base URL</label>
+          <input id="config-fhir-base" class="text-input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="http://192.168.40.24:8081/fhir">
+
+          <label class="field-label" for="config-patient-ids">Patient IDs (comma or newline separated)</label>
+          <textarea id="config-patient-ids" class="text-input focusable config-textarea" rows="4" placeholder="pat-001, pat-002, pat-003"></textarea>
+          <div class="config-hint">Example: pat-001, pat-002, pat-003</div>
+        </div>
+      </div>
+      <nav class="nav-bar">
+        <button class="nav-item focusable" data-action="reset-config">Reset</button>
+        <button class="nav-item focusable" data-action="save-config">Save</button>
+        <button class="nav-item focusable primary" data-action="apply-config">Apply</button>
+      </nav>
     </div>
   </div>
   <script src="app.js"></script>
