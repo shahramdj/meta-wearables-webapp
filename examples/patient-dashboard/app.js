@@ -44,7 +44,7 @@
     try {
       localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
     } catch (error) {
-      console.warn('Could not persist endpoint config:', error);
+      console.warn('Could not persist FHIR config:', error);
     }
   }
 
@@ -222,7 +222,7 @@
     state.mediaCache = {};
 
     renderPatientList();
-    setStatus('Endpoints updated');
+    setStatus('FHIR config updated');
 
     if (options.reload !== false) {
       navigateTo('home', { addToHistory: false });
@@ -488,7 +488,7 @@
     if (topCondition) highlights.push('Condition: ' + topCondition);
     if (topMedication) highlights.push('Medication: ' + topMedication);
     if (topAllergy) highlights.push('Allergy: ' + topAllergy);
-    if (!highlights.length) highlights.push('No highlights returned by microservice.');
+    if (!highlights.length) highlights.push('No highlights returned by the FHIR mock server.');
 
     recommendations.innerHTML = '';
     highlights.slice(0, 4).forEach(function(text) {
