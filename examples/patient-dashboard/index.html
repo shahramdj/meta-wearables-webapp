@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
-  <meta name="description" content="Microservice-backed patient dashboard for Meta Display Glasses with live context and medical image viewer.">
+  <meta name="description" content="FHIR mock-server patient dashboard for Meta Display Glasses with live context and medical image viewer.">
   <meta name="mrbd-web-app-capable" content="yes">
   <title>FHIR Patient Dashboard</title>
   <link rel="stylesheet" href="styles.css">
@@ -17,8 +17,8 @@
       </header>
       <div class="content">
         <div class="intro card">
-          <div class="intro-title">Microservice Feed</div>
-          <div class="intro-copy" id="intro-copy">Loading patient summaries from backend microservice.</div>
+          <div class="intro-title">FHIR Mock Feed</div>
+          <div class="intro-copy" id="intro-copy">Loading patient summaries from the FHIR mock server.</div>
         </div>
         <div id="loading" class="loading-container hidden">
           <div class="loading-spinner"></div>
@@ -108,10 +108,7 @@
       </header>
       <div class="content">
         <div class="card settings-card">
-          <div class="section-title">Connection</div>
-          <label class="field-label" for="config-api-base">API Base URL</label>
-          <input id="config-api-base" class="text-input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="http://192.168.40.24:8080">
-
+          <div class="section-title">FHIR Mock Server</div>
           <label class="field-label" for="config-fhir-base">FHIR Base URL</label>
           <input id="config-fhir-base" class="text-input focusable" type="text" autocomplete="off" spellcheck="false" placeholder="http://192.168.40.24:8081/fhir">
 

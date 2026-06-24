@@ -4,8 +4,6 @@
   var CONFIG_STORAGE_KEY = 'mdg_patient_dashboard_config_v1';
 
   var DEFAULT_CONFIG = {
-    apiBaseUrl: 'http://192.168.40.24:8080',
-    apiPrefix: '/api',
     fhirBaseUrl: 'http://192.168.40.24:8081/fhir',
     patientIds: ['pat-001', 'pat-002', 'pat-003', 'pat-004', 'pat-005'],
   };
@@ -26,8 +24,6 @@
   function buildConfig(source) {
     var patientIds = sanitizePatientIds(source && source.patientIds);
     return {
-      apiBaseUrl: source && source.apiBaseUrl ? String(source.apiBaseUrl).trim() : DEFAULT_CONFIG.apiBaseUrl,
-      apiPrefix: source && source.apiPrefix ? String(source.apiPrefix).trim() : DEFAULT_CONFIG.apiPrefix,
       fhirBaseUrl: source && source.fhirBaseUrl ? String(source.fhirBaseUrl).trim() : DEFAULT_CONFIG.fhirBaseUrl,
       patientIds: patientIds.length ? patientIds : DEFAULT_CONFIG.patientIds.slice(),
     };
@@ -131,10 +127,6 @@
     return String(url || '').replace(/\/$/, '');
   }
 
-  function apiUrl(path) {
-    return normalizeBaseUrl(CONFIG.apiBaseUrl) + CONFIG.apiPrefix + path;
-  }
-
   function fhirUrl(path) {
     return normalizeBaseUrl(CONFIG.fhirBaseUrl) + path;
   }
@@ -192,7 +184,6 @@
 
   function getConfigInputs() {
     return {
-      apiBase: document.getElementById('config-api-base'),
       fhirBase: document.getElementById('config-fhir-base'),
       patientIds: document.getElementById('config-patient-ids'),
     };
@@ -200,21 +191,18 @@
 
   function fillConfigForm(config) {
     var inputs = getConfigInputs();
-    if (!inputs.apiBase || !inputs.fhirBase || !inputs.patientIds) return;
-    inputs.apiBase.value = config.apiBaseUrl;
+    if (!inputs.fhirBase || !inputs.patientIds) return;
     inputs.fhirBase.value = config.fhirBaseUrl;
     inputs.patientIds.value = (config.patientIds || []).join(', ');
   }
 
   function readConfigForm() {
     var inputs = getConfigInputs();
-    if (!inputs.apiBase || !inputs.fhirBase || !inputs.patientIds) {
+    if (!inputs.fhirBase || !inputs.patientIds) {
       return buildConfig(CONFIG);
     }
 
     return buildConfig({
-      apiBaseUrl: inputs.apiBase.value,
-      apiPrefix: '/api',
       fhirBaseUrl: inputs.fhirBase.value,
       patientIds: sanitizePatientIds(inputs.patientIds.value),
     });
@@ -247,6 +235,144 @@
     return array[0] && array[0][field];
   }
 
+  function firstMap(values) {
+    return Array.isArray(values) && values.length && values[0] ? values[0] : {};
+  }
+
+  function primaryName(patient) {
+    var name = firstMap(patient && patient.name);
+    var parts = [];
+    var given = Array.isArray(name.given) ? name.given : [];
+
+    given.forEach(function(value) {
+      if (value) {
+        parts.push(String(value));
+      }
+    });
+
+    if (name.family) {
+      parts.push(String(name.family));
+    }
+
+    return parts.length ? parts.join(' ') : null;
+  }
+
+  function calculateAge(birthDate) {
+    if (!birthDate) return null;
+    var now = new Date();
+    var dob = new Date(birthDate);
+    if (Number.isNaN(dob.getTime())) return null;
+    var age = now.getFullYear() - dob.getFullYear();
+    var monthDelta = now.getMonth() - dob.getMonth();
+    if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < dob.getDate())) {
+      age -= 1;
+    }
+    return age;
+  }
+
+  function codeableConceptText(concept) {
+    if (!concept || typeof concept !== 'object') return null;
+    if (concept.text) return String(concept.text);
+    var coding = Array.isArray(concept.coding) ? concept.coding : [];
+    for (var i = 0; i < coding.length; i += 1) {
+      if (coding[i] && (coding[i].display || coding[i].code)) {
+        return String(coding[i].display || coding[i].code);
+      }
+    }
+    return null;
+  }
+
+  function referenceDisplay(reference) {
+    if (!reference || typeof reference !== 'object') return null;
+    return reference.display || reference.reference || null;
+  }
+
+  function normalizePatientSummary(patient) {
+    return {
+      id: patient.id,
+      demographics: {
+        name: primaryName(patient),
+        birthDate: patient.birthDate || null,
+        gender: patient.gender || null,
+      },
+      age: calculateAge(patient.birthDate),
+      sex: patient.gender || null,
+    };
+  }
+
+  function normalizeProcedures(resources) {
+    return resources.map(function(resource) {
+      var period = resource && resource.performedPeriod ? resource.performedPeriod : {};
+      return {
+        id: resource.id,
+        description: codeableConceptText(resource.code),
+        status: resource.status || null,
+        performed: resource.performedDateTime || period.start || null,
+      };
+    });
+  }
+
+  function normalizeAllergies(resources) {
+    return resources.map(function(resource) {
+      return {
+        id: resource.id,
+        substance: codeableConceptText(resource.code),
+        clinicalStatus: codeableConceptText(resource.clinicalStatus),
+      };
+    });
+  }
+
+  function normalizeConditions(resources) {
+    return resources.map(function(resource) {
+      return {
+        id: resource.id,
+        description: codeableConceptText(resource.code),
+        clinicalStatus: codeableConceptText(resource.clinicalStatus),
+      };
+    });
+  }
+
+  function normalizeMedications(resources) {
+    return resources.map(function(resource) {
+      return {
+        id: resource.id,
+        medication: codeableConceptText(resource.medicationCodeableConcept) || referenceDisplay(resource.medicationReference),
+        status: resource.status || null,
+      };
+    });
+  }
+
+  function normalizeLabs(resources) {
+    return resources.map(function(resource) {
+      var quantity = resource && resource.valueQuantity ? resource.valueQuantity : {};
+      return {
+        id: resource.id,
+        test: codeableConceptText(resource.code),
+        value: quantity.value || resource.valueString || codeableConceptText(resource.valueCodeableConcept),
+        unit: quantity.unit || null,
+        issued: resource.effectiveDateTime || resource.issued || null,
+      };
+    });
+  }
+
+  function normalizeImaging(resources) {
+    return resources.map(function(resource) {
+      var series = firstMap(resource && resource.series);
+      return {
+        id: resource.id,
+        description: resource.description || series.description || codeableConceptText(resource.procedureCode),
+        status: resource.status || null,
+        started: resource.started || null,
+        modality: codeableConceptText(series.modality),
+      };
+    });
+  }
+
+  function fetchPatientSummary(patientId) {
+    return requestJson(fhirUrl('/Patient/' + encodeURIComponent(patientId)))
+      .then(normalizePatientSummary);
+  }
+
   function loadPatientSummaries() {
     setLoading(true, 'Loading patient records...');
     clearError();
@@ -254,11 +380,11 @@
 
     var introCopy = document.getElementById('intro-copy');
     if (introCopy) {
-      introCopy.textContent = 'Connecting to ' + normalizeBaseUrl(CONFIG.apiBaseUrl) + CONFIG.apiPrefix;
+      introCopy.textContent = 'Connecting to ' + normalizeBaseUrl(CONFIG.fhirBaseUrl);
     }
 
     var requests = CONFIG.patientIds.map(function(id) {
-      return requestJson(apiUrl('/patient/' + encodeURIComponent(id) + '/summary'));
+      return fetchPatientSummary(id);
     });
 
     return Promise.allSettled(requests)
@@ -271,7 +397,7 @@
 
         var failedCount = results.length - state.patients.length;
         if (!state.patients.length) {
-          throw new Error('No patient summaries returned from microservice');
+          throw new Error('No patient summaries returned from FHIR server');
         }
 
         if (failedCount > 0) {
@@ -281,7 +407,7 @@
         }
       })
       .catch(function(error) {
-        setError('Backend request failed. Check API base URL, CORS, and service status.');
+        setError('FHIR request failed. Check FHIR base URL, CORS, and mock server status.');
         setStatus('Connection failed');
         throw error;
       })
@@ -422,7 +548,24 @@
       return Promise.resolve(state.contextCache[patientId]);
     }
 
-    return requestJson(apiUrl('/patient-context/' + encodeURIComponent(patientId)))
+    return Promise.all([
+      requestJson(fhirUrl('/AllergyIntolerance?patient=' + encodeURIComponent(patientId))),
+      requestJson(fhirUrl('/Condition?patient=' + encodeURIComponent(patientId))),
+      requestJson(fhirUrl('/MedicationRequest?patient=' + encodeURIComponent(patientId))),
+      requestJson(fhirUrl('/Observation?patient=' + encodeURIComponent(patientId))),
+      requestJson(fhirUrl('/ImagingStudy?patient=' + encodeURIComponent(patientId))),
+      requestJson(fhirUrl('/Procedure?patient=' + encodeURIComponent(patientId))),
+    ])
+      .then(function(results) {
+        return {
+          allergies: normalizeAllergies(readBundleEntries(results[0])),
+          conditions: normalizeConditions(readBundleEntries(results[1])),
+          medications: normalizeMedications(readBundleEntries(results[2])),
+          recentLabs: normalizeLabs(readBundleEntries(results[3])),
+          imaging: normalizeImaging(readBundleEntries(results[4])),
+          procedures: normalizeProcedures(readBundleEntries(results[5])),
+        };
+      })
       .then(function(context) {
         state.contextCache[patientId] = context;
         return context;
