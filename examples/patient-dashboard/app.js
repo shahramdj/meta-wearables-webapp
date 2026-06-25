@@ -125,7 +125,7 @@
     focusables[nextIndex].focus();
     var scrollParent = focusables[nextIndex].closest('.content, .patient-grid, .viewer-controls, .nav-bar');
     if (scrollParent) {
-      focusables[nextIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      focusables[nextIndex].scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
     }
   }
 
@@ -481,9 +481,26 @@
     return Math.max(min, Math.min(max, value));
   }
 
+  function constrainViewer() {
+    var image = document.getElementById('xray-image');
+    var frame = document.querySelector('.xray-frame');
+    if (!image || !frame || !image.naturalWidth || !image.naturalHeight) return;
+
+    var frameWidth = frame.clientWidth;
+    var frameHeight = frame.clientHeight;
+    if (!frameWidth || !frameHeight) return;
+
+    var maxOffsetX = Math.max(0, ((image.naturalWidth * state.viewer.scale) - frameWidth) / 2 + 24);
+    var maxOffsetY = Math.max(0, ((image.naturalHeight * state.viewer.scale) - frameHeight) / 2 + 24);
+
+    state.viewer.x = clamp(state.viewer.x, -maxOffsetX, maxOffsetX);
+    state.viewer.y = clamp(state.viewer.y, -maxOffsetY, maxOffsetY);
+  }
+
   function updateViewer() {
     var image = document.getElementById('xray-image');
     if (!image) return;
+    constrainViewer();
     image.style.transform = 'translate(' + state.viewer.x + 'px, ' + state.viewer.y + 'px) scale(' + state.viewer.scale + ')';
   }
 
@@ -522,6 +539,10 @@
   function setImageSource(url, alt) {
     var image = document.getElementById('xray-image');
     if (!image) return;
+    image.onload = function() {
+      state.viewer = { scale: 1, x: 0, y: 0 };
+      updateViewer();
+    };
     image.src = url;
     image.alt = alt;
     image.onerror = function() {
@@ -587,7 +608,7 @@
 
   function populateDetail(summary, context, imageInfo) {
     state.currentPatient = summary;
-    state.viewer = { scale: 1.4, x: 0, y: 0 };
+    state.viewer = { scale: 1, x: 0, y: 0 };
 
     var detailName = (summary.demographics && summary.demographics.name) || summary.id;
     document.getElementById('detail-name').textContent = detailName;
@@ -671,7 +692,7 @@
   }
 
   function resetView() {
-    state.viewer = { scale: 1.4, x: 0, y: 0 };
+    state.viewer = { scale: 1, x: 0, y: 0 };
     updateViewer();
   }
 
