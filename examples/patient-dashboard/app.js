@@ -68,6 +68,15 @@
     mediaCache: {},
     isLoading: false,
     viewer: { scale: 1, x: 0, y: 0 },
+    gesture: {
+      active: false,
+      startDistance: 0,
+      startAngle: 0,
+      startCenter: { x: 0, y: 0 },
+      startViewer: { scale: 1, x: 0, y: 0 },
+      mode: 'touch',
+      gestureBaseScale: 1,
+    },
   };
 
   var screens = {};
@@ -481,6 +490,23 @@
     return Math.max(min, Math.min(max, value));
   }
 
+  function touchDistance(touchA, touchB) {
+    var dx = touchB.clientX - touchA.clientX;
+    var dy = touchB.clientY - touchA.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function touchAngle(touchA, touchB) {
+    return Math.atan2(touchB.clientY - touchA.clientY, touchB.clientX - touchA.clientX);
+  }
+
+  function touchCenter(touchA, touchB) {
+    return {
+      x: (touchA.clientX + touchB.clientX) / 2,
+      y: (touchA.clientY + touchB.clientY) / 2,
+    };
+  }
+
   function constrainViewer() {
     var image = document.getElementById('xray-image');
     var frame = document.querySelector('.xray-frame');
@@ -502,6 +528,102 @@
     if (!image) return;
     constrainViewer();
     image.style.transform = 'translate(' + state.viewer.x + 'px, ' + state.viewer.y + 'px) scale(' + state.viewer.scale + ')';
+  }
+
+  function startTouchGesture(touchA, touchB) {
+    state.gesture.active = true;
+    state.gesture.mode = 'touch';
+    state.gesture.startDistance = touchDistance(touchA, touchB);
+    state.gesture.startAngle = touchAngle(touchA, touchB);
+    state.gesture.startCenter = touchCenter(touchA, touchB);
+    state.gesture.startViewer = {
+      scale: state.viewer.scale,
+      x: state.viewer.x,
+      y: state.viewer.y,
+    };
+  }
+
+  function applyTouchGesture(touchA, touchB) {
+    if (!state.gesture.active || state.gesture.mode !== 'touch') return;
+
+    var currentDistance = touchDistance(touchA, touchB);
+    var currentAngle = touchAngle(touchA, touchB);
+    var currentCenter = touchCenter(touchA, touchB);
+
+    var distanceRatio = state.gesture.startDistance > 0 ? (currentDistance / state.gesture.startDistance) : 1;
+    var angleDelta = (currentAngle - state.gesture.startAngle) * (180 / Math.PI);
+    var rotationZoomFactor = Math.pow(1.0035, angleDelta);
+    var targetScale = state.gesture.startViewer.scale * distanceRatio * rotationZoomFactor;
+
+    state.viewer.scale = clamp(targetScale, 0.7, 3.2);
+    state.viewer.x = state.gesture.startViewer.x + (currentCenter.x - state.gesture.startCenter.x);
+    state.viewer.y = state.gesture.startViewer.y + (currentCenter.y - state.gesture.startCenter.y);
+    updateViewer();
+  }
+
+  function endGesture() {
+    state.gesture.active = false;
+  }
+
+  function setupViewerGestures() {
+    var wrapper = document.getElementById('xray-wrapper');
+    if (!wrapper) return;
+
+    wrapper.style.touchAction = 'none';
+
+    wrapper.addEventListener('touchstart', function(event) {
+      if (event.touches.length >= 2) {
+        startTouchGesture(event.touches[0], event.touches[1]);
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    wrapper.addEventListener('touchmove', function(event) {
+      if (event.touches.length >= 2) {
+        applyTouchGesture(event.touches[0], event.touches[1]);
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    wrapper.addEventListener('touchend', function(event) {
+      if (event.touches.length < 2) {
+        endGesture();
+      }
+    }, { passive: false });
+
+    wrapper.addEventListener('touchcancel', function() {
+      endGesture();
+    }, { passive: false });
+
+    wrapper.addEventListener('gesturestart', function(event) {
+      state.gesture.active = true;
+      state.gesture.mode = 'webkit';
+      state.gesture.gestureBaseScale = state.viewer.scale;
+      state.gesture.startCenter = { x: event.clientX || 0, y: event.clientY || 0 };
+      state.gesture.startViewer = {
+        scale: state.viewer.scale,
+        x: state.viewer.x,
+        y: state.viewer.y,
+      };
+      event.preventDefault();
+    }, { passive: false });
+
+    wrapper.addEventListener('gesturechange', function(event) {
+      if (!state.gesture.active || state.gesture.mode !== 'webkit') return;
+
+      var rotationZoomFactor = Math.pow(1.0035, event.rotation || 0);
+      var nextScale = state.gesture.gestureBaseScale * (event.scale || 1) * rotationZoomFactor;
+      state.viewer.scale = clamp(nextScale, 0.7, 3.2);
+      state.viewer.x = state.gesture.startViewer.x + ((event.clientX || 0) - state.gesture.startCenter.x);
+      state.viewer.y = state.gesture.startViewer.y + ((event.clientY || 0) - state.gesture.startCenter.y);
+      updateViewer();
+      event.preventDefault();
+    }, { passive: false });
+
+    wrapper.addEventListener('gestureend', function(event) {
+      endGesture();
+      event.preventDefault();
+    }, { passive: false });
   }
 
   function renderHighlights(context) {
@@ -816,6 +938,7 @@
   function init() {
     collectScreens();
     setupEvents();
+    setupViewerGestures();
     fillConfigForm(CONFIG);
     navigateTo('home', { addToHistory: false });
   }
