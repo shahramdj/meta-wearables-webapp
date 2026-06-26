@@ -906,6 +906,20 @@
     updateViewer();
   }
 
+  function exitApp() {
+    // Browsers may block closing tabs not opened by script.
+    window.close();
+
+    if (!window.closed) {
+      setStatus('Exit requested');
+      try {
+        window.location.href = 'about:blank';
+      } catch (error) {
+        setError('Exit is blocked by this browser. Close the app window manually.');
+      }
+    }
+  }
+
   function handleAction(action, element) {
     switch (action) {
       case 'view-patient':
@@ -923,6 +937,9 @@
       case 'open-settings':
         fillConfigForm(CONFIG);
         navigateTo('settings', { addToHistory: false });
+        break;
+      case 'exit-app':
+        exitApp();
         break;
       case 'save-config':
         persistConfig(readConfigForm());
