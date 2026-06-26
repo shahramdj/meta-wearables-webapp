@@ -552,6 +552,14 @@
     };
   }
 
+  // Hold-pinch-rotate gesture:
+  //   Place two fingers in a pinch (keep distance stable) then rotate:
+  //   clockwise  (+angle) -> zoom in
+  //   counter-clockwise (-angle) -> zoom out
+  //   Moving two-finger center -> pan
+  var HOLD_PINCH_THRESHOLD = 0.18;
+  var ZOOM_SENSITIVITY = 1.022;
+
   function applyTouchGesture(touchA, touchB) {
     if (!state.gesture.active || state.gesture.mode !== 'touch') return;
 
@@ -559,12 +567,19 @@
     var currentAngle = touchAngle(touchA, touchB);
     var currentCenter = touchCenter(touchA, touchB);
 
-    var distanceRatio = state.gesture.startDistance > 0 ? (currentDistance / state.gesture.startDistance) : 1;
-    var angleDelta = (currentAngle - state.gesture.startAngle) * (180 / Math.PI);
-    var rotationZoomFactor = Math.pow(1.0035, angleDelta);
-    var targetScale = state.gesture.startViewer.scale * distanceRatio * rotationZoomFactor;
+    var distanceRatio = state.gesture.startDistance > 0 ? currentDistance / state.gesture.startDistance : 1;
 
-    state.viewer.scale = clamp(targetScale, 0.7, 3.2);
+    var rawDelta = currentAngle - state.gesture.startAngle;
+    while (rawDelta > Math.PI) { rawDelta -= 2 * Math.PI; }
+    while (rawDelta < -Math.PI) { rawDelta += 2 * Math.PI; }
+    var angleDeg = rawDelta * (180 / Math.PI);
+
+    var isHoldPinch = Math.abs(distanceRatio - 1) <= HOLD_PINCH_THRESHOLD;
+    if (isHoldPinch && Math.abs(angleDeg) > 2) {
+      var zoomFactor = Math.pow(ZOOM_SENSITIVITY, angleDeg);
+      state.viewer.scale = clamp(state.gesture.startViewer.scale * zoomFactor, 0.4, 5.0);
+    }
+
     state.viewer.x = state.gesture.startViewer.x + (currentCenter.x - state.gesture.startCenter.x);
     state.viewer.y = state.gesture.startViewer.y + (currentCenter.y - state.gesture.startCenter.y);
     updateViewer();
@@ -620,9 +635,8 @@
     wrapper.addEventListener('gesturechange', function(event) {
       if (!state.gesture.active || state.gesture.mode !== 'webkit') return;
 
-      var rotationZoomFactor = Math.pow(1.0035, event.rotation || 0);
-      var nextScale = state.gesture.gestureBaseScale * (event.scale || 1) * rotationZoomFactor;
-      state.viewer.scale = clamp(nextScale, 0.7, 3.2);
+      var zoomFactor = Math.pow(ZOOM_SENSITIVITY, event.rotation || 0);
+      state.viewer.scale = clamp(state.gesture.gestureBaseScale * zoomFactor, 0.4, 5.0);
       state.viewer.x = state.gesture.startViewer.x + ((event.clientX || 0) - state.gesture.startCenter.x);
       state.viewer.y = state.gesture.startViewer.y + ((event.clientY || 0) - state.gesture.startCenter.y);
       updateViewer();
