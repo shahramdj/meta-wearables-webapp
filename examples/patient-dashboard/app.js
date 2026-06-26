@@ -552,6 +552,16 @@
     };
   }
 
+<<<<<<< HEAD
+  // Hold-pinch-rotate gesture:
+  //   Place two fingers in a pinch (keep distance stable) then rotate:
+  //   clockwise  (+angle) → zoom in
+  //   counter-clockwise (−angle) → zoom out
+  //   Moving two-finger center → pan
+  var HOLD_PINCH_THRESHOLD = 0.18; // allow up to 18% distance drift before ignoring zoom
+  var ZOOM_SENSITIVITY = 1.022;    // scale factor per degree of rotation
+
+=======
   // Hold-pinch-rotate gesture:
   //   Place two fingers in a pinch (keep distance stable) then rotate:
   //   clockwise  (+angle) -> zoom in
@@ -560,6 +570,7 @@
   var HOLD_PINCH_THRESHOLD = 0.18;
   var ZOOM_SENSITIVITY = 1.022;
 
+>>>>>>> b113d101c949d4884cf4cdaad3418434d89e15c5
   function applyTouchGesture(touchA, touchB) {
     if (!state.gesture.active || state.gesture.mode !== 'touch') return;
 
@@ -569,6 +580,22 @@
 
     var distanceRatio = state.gesture.startDistance > 0 ? currentDistance / state.gesture.startDistance : 1;
 
+<<<<<<< HEAD
+    // Normalize angle delta to -180..180 to avoid wrap-around flipping
+    var rawDelta = currentAngle - state.gesture.startAngle;
+    while (rawDelta > Math.PI) { rawDelta -= 2 * Math.PI; }
+    while (rawDelta < -Math.PI) { rawDelta += 2 * Math.PI; }
+    var angleDeg = rawDelta * (180 / Math.PI);
+
+    // Only zoom when fingers are held stable (not spreading/closing)
+    var isHoldPinch = Math.abs(distanceRatio - 1) <= HOLD_PINCH_THRESHOLD;
+    if (isHoldPinch && Math.abs(angleDeg) > 2) {
+      var zoomFactor = Math.pow(ZOOM_SENSITIVITY, angleDeg);
+      state.viewer.scale = clamp(state.gesture.startViewer.scale * zoomFactor, 0.4, 5.0);
+    }
+
+    // Pan always follows the two-finger center movement
+=======
     var rawDelta = currentAngle - state.gesture.startAngle;
     while (rawDelta > Math.PI) { rawDelta -= 2 * Math.PI; }
     while (rawDelta < -Math.PI) { rawDelta += 2 * Math.PI; }
@@ -580,6 +607,7 @@
       state.viewer.scale = clamp(state.gesture.startViewer.scale * zoomFactor, 0.4, 5.0);
     }
 
+>>>>>>> b113d101c949d4884cf4cdaad3418434d89e15c5
     state.viewer.x = state.gesture.startViewer.x + (currentCenter.x - state.gesture.startCenter.x);
     state.viewer.y = state.gesture.startViewer.y + (currentCenter.y - state.gesture.startCenter.y);
     updateViewer();
@@ -635,8 +663,15 @@
     wrapper.addEventListener('gesturechange', function(event) {
       if (!state.gesture.active || state.gesture.mode !== 'webkit') return;
 
+<<<<<<< HEAD
+      // Rotation-only zoom: CW (+rotation) = zoom in, CCW = zoom out.
+      // event.scale is intentionally ignored — only rotation drives zoom.
       var zoomFactor = Math.pow(ZOOM_SENSITIVITY, event.rotation || 0);
       state.viewer.scale = clamp(state.gesture.gestureBaseScale * zoomFactor, 0.4, 5.0);
+=======
+      var zoomFactor = Math.pow(ZOOM_SENSITIVITY, event.rotation || 0);
+      state.viewer.scale = clamp(state.gesture.gestureBaseScale * zoomFactor, 0.4, 5.0);
+>>>>>>> b113d101c949d4884cf4cdaad3418434d89e15c5
       state.viewer.x = state.gesture.startViewer.x + ((event.clientX || 0) - state.gesture.startCenter.x);
       state.viewer.y = state.gesture.startViewer.y + ((event.clientY || 0) - state.gesture.startCenter.y);
       updateViewer();
