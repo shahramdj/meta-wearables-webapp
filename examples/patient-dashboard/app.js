@@ -104,6 +104,11 @@
       return;
     }
 
+    if (state.currentScreen === 'image-viewer') {
+      navigateTo('home', { addToHistory: false });
+      return;
+    }
+
     if (state.currentScreen === 'settings') {
       navigateTo('home', { addToHistory: false });
     }
@@ -791,6 +796,80 @@
     });
   }
 
+  function getPreferredImagePatientId() {
+    if (state.currentPatient && state.currentPatient.id) {
+      return state.currentPatient.id;
+    }
+
+    if (state.patients.length) {
+      return state.patients[0].id;
+    }
+
+    return null;
+  }
+
+  function setImageViewerHeader(summary) {
+    var meta = document.getElementById('image-patient-meta');
+    if (!meta) return;
+
+    if (!summary) {
+      meta.textContent = 'No patient selected';
+      return;
+    }
+
+    var patientName = shortText(summary.demographics && summary.demographics.name) || summary.id;
+    meta.textContent = patientName + ' (' + summary.id + ')';
+  }
+
+  function openImageWindow() {
+    function openForPatient(patientId) {
+      if (!patientId) {
+        setError('No patient available. Load data first.');
+        return;
+      }
+
+      var summary = state.patients.find(function(item) { return item.id === patientId; }) || { id: patientId, demographics: {} };
+      state.currentPatient = summary;
+      setImageViewerHeader(summary);
+      setStatus('Loading image ' + patientId + '...');
+
+      loadMedicalImage(patientId)
+        .then(function(imageInfo) {
+          if (imageInfo && imageInfo.imageUrl) {
+            setImageSource(imageInfo.imageUrl, (summary.demographics && summary.demographics.name) || patientId + ' medical image');
+            setImageHint('Image source: ' + shortText(imageInfo.mediaId) + ' (' + shortText(imageInfo.modality) + ')');
+          } else {
+            setImageSource(FALLBACK_XRAY, patientId + ' medical image unavailable');
+            setImageHint('FHIR media endpoint unavailable. Showing fallback image.');
+          }
+          navigateTo('image-viewer', { addToHistory: false });
+          setStatus('Image ready');
+        })
+        .catch(function(error) {
+          setImageSource(FALLBACK_XRAY, patientId + ' medical image unavailable');
+          setImageHint('Image unavailable. Showing fallback image.');
+          navigateTo('image-viewer', { addToHistory: false });
+          setStatus('Image load failed');
+          setError('Could not load image. ' + (error && error.message ? error.message : ''));
+        });
+    }
+
+    clearError();
+
+    if (!state.patients.length) {
+      loadPatientSummaries()
+        .then(function() {
+          openForPatient(getPreferredImagePatientId());
+        })
+        .catch(function() {
+          setError('Unable to load patients for image viewer.');
+        });
+      return;
+    }
+
+    openForPatient(getPreferredImagePatientId());
+  }
+
   function reloadDetail() {
     if (!state.currentPatient || !state.currentPatient.id) {
       return;
@@ -828,6 +907,9 @@
         break;
       case 'reload-patients':
         loadPatientSummaries();
+        break;
+      case 'open-image-window':
+        openImageWindow();
         break;
       case 'open-settings':
         fillConfigForm(CONFIG);

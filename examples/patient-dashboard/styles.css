@@ -183,38 +183,31 @@ body {
 .hidden { display: none !important; }
 
 #detail .content {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  display: block;
   gap: 12px;
-  overflow: hidden;
-  align-items: stretch;
+  overflow-y: auto;
 }
 
 #detail .detail-grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
-  min-height: 0;
-  overflow-y: auto;
 }
 
 #detail .vitals-card,
 #detail .ai-card {
-  min-height: 0;
+  min-height: 170px;
 }
 
-#detail .xray-card {
-  min-height: 0;
+#image-viewer .content {
+  overflow: hidden;
+}
+
+.xray-screen-card {
   height: 100%;
 }
 
-#detail .xray-frame {
-  flex: 1;
-  min-height: 0;
-  height: auto;
-}
-
-#detail .viewer-controls .nav-item {
-  min-height: 42px;
+#image-viewer .xray-frame {
+  height: 300px;
 }
 
 @media (max-width: 600px) {
@@ -226,5 +219,9 @@ body {
   .viewer-controls,
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  #image-viewer .xray-frame {
+    height: 240px;
   }
 }

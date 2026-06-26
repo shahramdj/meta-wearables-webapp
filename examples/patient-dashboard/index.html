@@ -32,6 +32,7 @@
       </div>
       <nav class="nav-bar">
         <button class="nav-item focusable" data-action="reload-patients">Reload</button>
+        <button class="nav-item focusable" data-action="open-image-window">Image Viewer</button>
         <button class="nav-item focusable" data-action="open-settings">FHIR Config</button>
       </nav>
     </div>
@@ -75,8 +76,19 @@
             <div id="ai-recommendations" class="recommendations"></div>
           </div>
         </div>
+      </div>
+    </div>
 
-        <div class="card xray-card">
+    <div id="image-viewer" class="screen hidden">
+      <header class="header">
+        <button class="back-btn focusable" data-action="back">&#8592;</button>
+        <div>
+          <h1>Image Viewer</h1>
+          <div class="header-meta" id="image-patient-meta">No patient selected</div>
+        </div>
+      </header>
+      <div class="content">
+        <div class="card xray-card xray-screen-card">
           <div class="section-title">X-ray Viewer</div>
           <div class="xray-frame">
             <div class="xray-image-wrapper" id="xray-wrapper">
