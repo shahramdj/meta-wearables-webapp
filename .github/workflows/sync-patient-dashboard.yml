@@ -16,29 +16,30 @@ jobs:
       - name: Checkout source repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          path: source
 
-      - name: Configure git user
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          repository: shahramdj/Meta-test-apps
+          token: ${{ secrets.META_TEST_APPS_TOKEN }}
+          path: target
+          fetch-depth: 1
+
+      - name: Sync patient-dashboard files into target root
         run: |
+          find target -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          rsync -av source/examples/patient-dashboard/ target/
+
+      - name: Commit and push
+        run: |
+          cd target
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Add target remote
-        env:
-          META_TEST_APPS_TOKEN: ${{ secrets.META_TEST_APPS_TOKEN }}
-        run: |
-          if [ -z "$META_TEST_APPS_TOKEN" ]; then
-            echo "META_TEST_APPS_TOKEN secret is not set."
-            exit 1
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to sync."
+          else
+            git commit -m "sync: patient-dashboard @ ${{ github.sha }}"
+            git push origin main
           fi
-          git remote add meta-test-apps "https://x-access-token:${META_TEST_APPS_TOKEN}@github.com/shahramdj/Meta-test-apps.git"
-
-      - name: Split patient dashboard subtree
-        run: |
-          git fetch origin main
-          git subtree split --prefix examples/patient-dashboard origin/main -b patient-dashboard-sync
-
-      - name: Push subtree to target main
-        run: |
-          # Force push keeps target main exactly equal to patient-dashboard subtree.
-          git push --force meta-test-apps patient-dashboard-sync:main
