@@ -28,6 +28,7 @@
     startCenter: { x: 0, y: 0 },
     startState: { scale: 1, x: 0, y: 0, rotation: 0 },
     lastPinchStartAt: 0,
+    lastToastAt: 0,
   };
 
   var pointers = new Map();
@@ -59,6 +60,37 @@
   function setHint(text) {
     var hint = document.getElementById('hint');
     if (hint) hint.textContent = text;
+  }
+
+  function showToast(text) {
+    var old = document.getElementById('gesture-toast');
+    if (old && old.parentNode) {
+      old.parentNode.removeChild(old);
+    }
+
+    var toast = document.createElement('div');
+    toast.id = 'gesture-toast';
+    toast.textContent = text;
+    toast.style.position = 'fixed';
+    toast.style.left = '50%';
+    toast.style.bottom = '18px';
+    toast.style.transform = 'translateX(-50%)';
+    toast.style.padding = '9px 14px';
+    toast.style.borderRadius = '10px';
+    toast.style.background = 'rgba(10, 12, 16, 0.88)';
+    toast.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+    toast.style.color = '#ffffff';
+    toast.style.fontSize = '13px';
+    toast.style.fontWeight = '600';
+    toast.style.zIndex = '9999';
+    toast.style.pointerEvents = 'none';
+    document.body.appendChild(toast);
+
+    window.setTimeout(function() {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 850);
   }
 
   function applyTransform() {
@@ -159,6 +191,11 @@
       rotation: state.rotation,
     };
     gesture.lastPinchStartAt = now;
+
+    if (now - gesture.lastToastAt > 600) {
+      showToast(isDoublePinch ? 'Double pinch detected' : 'Pinch detected');
+      gesture.lastToastAt = now;
+    }
 
     if (gesture.mode === 'rotate') {
       setHint('Double pinch detected: rotate hand to rotate image.');

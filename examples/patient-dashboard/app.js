@@ -631,6 +631,7 @@
         x: state.viewer.x,
         y: state.viewer.y,
       };
+
       event.preventDefault();
     }, { passive: false });
 
