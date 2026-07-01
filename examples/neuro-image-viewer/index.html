@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="Neuro gesture image viewer for Meta Display Glasses with zoom, pan, and rotate controls.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <title>Neuro Image Viewer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="screen">
+    <header class="header">
+      <h1>Neuro Image Viewer</h1>
+      <div id="status" class="meta">Ready</div>
+    </header>
+
+    <main class="content">
+      <section class="viewer-card">
+        <div class="viewer-frame" id="viewer-frame">
+          <img id="viewer-image" alt="Sample image for neuro gesture viewer" draggable="false">
+        </div>
+        <p class="hint" id="hint">
+          Pinch + rotate to zoom. Pinch + move to pan. Double-pinch + rotate to rotate image.
+        </p>
+      </section>
+
+      <section class="command-card">
+        <h2>App Commands</h2>
+        <p>Use from console or host integration:</p>
+        <div class="command-list">
+          <div>viewer.zoom(delta)</div>
+          <div>viewer.pan(dx, dy)</div>
+          <div>viewer.rotate(angle)</div>
+          <div>viewer.reset()</div>
+          <div>viewer.getState()</div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="nav-bar">
+      <button class="nav-item focusable" data-action="zoom-out">Zoom -</button>
+      <button class="nav-item focusable" data-action="zoom-in">Zoom +</button>
+      <button class="nav-item focusable" data-action="pan-left">Left</button>
+      <button class="nav-item focusable" data-action="pan-right">Right</button>
+      <button class="nav-item focusable" data-action="pan-up">Up</button>
+      <button class="nav-item focusable" data-action="pan-down">Down</button>
+      <button class="nav-item focusable" data-action="rotate-left">Rotate -</button>
+      <button class="nav-item focusable" data-action="rotate-right">Rotate +</button>
+      <button class="nav-item focusable primary" data-action="reset">Reset</button>
+    </nav>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
